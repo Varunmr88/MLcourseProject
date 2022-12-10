@@ -1,0 +1,143 @@
+---
+title: "MLCourseProject"
+author: "Varun"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+### Course Project- Machine learning.
+
+## Executive Summary
+The goal of the project was to predict the manner in which they did the exercise. The same is denoted as "classe" variable in the data set. Dat is cleaned by removing variables with more than 9)% NA values, those variables who had near zero variance and metadata variable not related to outcome.
+Models are Built using Random Forest, Decision Tree, GBm,SVM Algorithms. All models are trained on subtrain data and tested on validation data. datasets were made by splitting intitial training data. Randomforest model came with highest accuracy of 0.9904 which was used to predict the test data.
+
+## **Background**
+
+Using devices such as *Jawbone Up*, *Nike FuelBand*, and *Fitbit* it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement -- a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how *much* of a particular activity they do, but they rarely quantify *how well they do it*. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: <http://groupware.les.inf.puc-rio.br/har> (see the section on the Weight Lifting Exercise Dataset).
+
+### Acknowledgement:
+
+The data for this project come from this source: <http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har>.
+[Ugulino, W.](http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/collaborator.jsf?p1=ugulino); [Cardador, D.](http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/collaborator.jsf?p1=debora); [Vega, K.](http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/collaborator.jsf?p1=katia); [Velloso, E.](http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/collaborator.jsf?p1=evelloso); Milidiu, R.; [Fuks, H.](http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/collaborator.jsf?p1=hugo) [**Wearable Computing: Accelerometers' Data Classification of Body Postures and Movements**](http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/work.jsf?p1=10335 "Wearable Computing: Accelerometers' Data Classification of Body Postures and Movements"). Proceedings of 21st Brazilian Symposium on Artificial Intelligence. Advances in Artificial Intelligence - SBIA 2012. In: Lecture Notes in Computer Science. , pp. 52-61. Curitiba, PR: Springer Berlin / Heidelberg, 2012. ISBN 978-3-642-34458-9. DOI: 10.1007/978-3-642-34459-6_6.\
+\
+Read more: [http:/groupware.les.inf.puc-rio.br/har#ixzz4TkLUPdxa](http://web.archive.org/groupware.les.inf.puc-rio.br/har#ixzz4TkLUPdxa)
+
+```{r}
+library(tidyverse)
+library(caret)
+library(e1071)
+library(glmnet)
+library(MLmetrics)
+library(caretEnsemble)
+library(kernlab)
+library(SmartEDA)
+library(rattle)
+```
+
+```{r import-data, cache=TRUE}
+if(!file.exists("data")){
+    dir.create("data")
+}
+fileURL<-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+    download.file(fileURL,destfile = "./data/pml-training.csv",method = "curl")
+fileURL2<-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(fileURL2,destfile = "./data/pml-testing.csv",method = "curl")
+datedoenloaded<-date()
+traindata<-read.csv("./data/pml-training.csv")
+testdata<-read.csv("./data/pml-testing.csv")
+dim(traindata)
+dim(testdata)
+```
+
+There 160 variables in the dataset. Test se has 20 observations while training set has 19622.
+
+### Exploring the data.
+
+```{r}
+ExpData(data=traindata,type = 1)
+```
+
+### Cleaning the data
+
+It is seen that %. of variables having >=90% missing cases is 62.5%(100). We will remove those variables as part of data cleaning. Column 1 to 6 is metadata and not relevant for analysis. We will remove that too.
+
+```{r}
+traindata2<-traindata[,colMeans(is.na(traindata))<0.9] # removing more than 90%NA
+traindata2<-traindata2[,-c(1:7)]
+```
+
+Removing near zero variance varibles in the data.
+
+```{r}
+nearzerovar<-nearZeroVar(traindata2)
+traindata2<-traindata2[,-nearzerovar]
+dim(traindata2)
+```
+Now we split data into subtrain and validation set.
+
+```{r}
+inTrain<-createDataPartition(y=traindata2$classe,p=0.7,list=F)
+subtrain<-traindata2[inTrain,]
+valid<-traindata2[-inTrain,]
+dim(subtrain)
+dim(valid)
+```
+
+
+### Creation of models
+
+Here we will train the data using Random Forest,SVM, Decision tree,and Gradient Boosted tree Models.
+We also set up control for training to use 3-fold cross validation.
+
+```{r}
+control<-trainControl(method="cv", number=3,verboseIter = F)
+```
+
+### Random Forest Model
+
+```{r rftree, cache=TRUE}
+modlrf<-train(classe~.,data=subtrain,method="rf",trControl=control,tuneLength=5)
+pred_rf<-predict(modlrf,valid)
+cmrf<-confusionMatrix(pred_rf,factor(valid$classe))
+cmrf
+```
+
+### SVM Model
+```{r SVM Model,cache=TRUE}
+modlsvm<-train(classe~.,method="svmLinear",data=subtrain,trControl=control,tuneLength=5,verbose=F)
+pred_svm<-predict(modlsvm,valid)
+cmsvm<-confusionMatrix(pred_svm,factor(valid$classe))
+```
+###   Decision Tree 
+```{r decision tree, cache=TRUE}
+
+modl_dtree<-train(classe~.,data=subtrain,method="rpart",trControl=control,tuneLength=5)
+fancyRpartPlot(modl_dtree$finalModel)
+pre_dtree<-predict(modl_dtree,valid)
+cmdtree<-confusionMatrix(pre_dtree,factor(valid$classe))
+cmdtree
+```
+
+### Gradient Boosted Trees
+
+```{r GBM, cache=TRUE}
+mdlgbm<-train(classe~.,data=subtrain,method="gbm",trControl=control,tuneLength=5,verbose=F)
+pre_gbm<-predict(mdlgbm,valid)
+cmgbm<-confusionMatrix(pre_gbm,factor(valid$classe))
+```
+
+```{r}
+SVMModel<-cmsvm$overall["Accuracy"]
+GBMModel<-cmgbm$overall["Accuracy"]
+RandomForestModel<-cmrf$overall["Accuracy"]
+DecisionTreeModel<-cmdtree$overall["Accuracy"]
+ans<-cbind(SVMModel,GBMModel,RandomForestModel,DecisionTreeModel)
+ans
+```
+From above analysis it is seen that Random Forest Model is the best among others. So we use the same to predict the test data.
+
+```{r}
+finalpred<-predict(modlrf,testdata)
+finalpred
+```
+
